@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo (Fixed Capture Only)</title>
+<title>Ludo (Stable: AI + Turns + Capture)</title>
 
 <style>
 body{
@@ -11,26 +11,21 @@ body{
   align-items:center;
   height:100vh;
   margin:0;
+  gap:20px;
 }
-
-.wrapper{
-  position:relative;
-}
-
+.wrapper{ position:relative; }
 #board{
   display:grid;
   grid-template-columns:repeat(15,40px);
   grid-template-rows:repeat(15,40px);
 }
-
 .cell{
-  width:40px;
-  height:40px;
+  width:40px;height:40px;
   border:1px solid #333;
   background:#eee;
 }
 
-/* ORIGINAL COLORS (UNCHANGED) */
+/* bases (kept simple) */
 .red-base{background:#e74c3c}
 .green-base{background:#27ae60}
 .blue-base{background:#3498db}
@@ -39,18 +34,14 @@ body{
 .center{background:#222;}
 
 .token{
-  width:22px;
-  height:22px;
-  border-radius:50%;
-  position:absolute;
-  border:2px solid white;
-  cursor:pointer;
+  width:22px;height:22px;border-radius:50%;
+  position:absolute;border:2px solid white;
+  cursor:pointer; transition:0.2s;
 }
+.active{ box-shadow:0 0 15px #fff; }
+.inactive{ opacity:0.4; pointer-events:none; }
 
-.panel{
-  margin-left:20px;
-  color:white;
-}
+.panel{ color:white; }
 </style>
 </head>
 
@@ -63,37 +54,42 @@ body{
 <div class="panel">
   <button onclick="rollDice()">🎲 Roll</button>
   <h2 id="dice">-</h2>
-  <h3 id="turn">Player 1</h3>
+  <h3 id="turn">Red Player</h3>
 </div>
 
 <script>
-
 // ---------------- UI ----------------
-const board=document.getElementById("board")
-const diceEl=document.getElementById("dice")
-const turnEl=document.getElementById("turn")
+const board=document.getElementById("board");
+const diceEl=document.getElementById("dice");
+const turnEl=document.getElementById("turn");
 
-// ---------------- BOARD (UNCHANGED) ----------------
+const COLORS=["Red","Green","Yellow","Blue"];
+
+// CHANGE HERE: who is AI
+const PLAYER_TYPES=["human","ai","human","ai"];
+
+let isMoving=false;
+
+// ---------------- BOARD ----------------
 for(let r=0;r<15;r++){
  for(let c=0;c<15;c++){
+  let div=document.createElement("div");
+  div.className="cell";
 
-  let div=document.createElement("div")
-  div.className="cell"
-
-  if(r<6 && c<6) div.classList.add("red-base")
-  else if(r<6 && c>8) div.classList.add("green-base")
-  else if(r>8 && c<6) div.classList.add("blue-base")
-  else if(r>8 && c>8) div.classList.add("yellow-base")
+  if(r<6 && c<6) div.classList.add("red-base");
+  else if(r<6 && c>8) div.classList.add("green-base");
+  else if(r>8 && c<6) div.classList.add("blue-base");
+  else if(r>8 && c>8) div.classList.add("yellow-base");
 
   if(r>=6 && r<=8 && c>=6 && c<=8){
-    div.classList.add("center")
+    div.classList.add("center");
   }
 
-  board.appendChild(div)
+  board.appendChild(div);
  }
 }
 
-// ---------------- TRACK (UNCHANGED) ----------------
+// ---------------- TRACK ----------------
 const TRACK=[
 [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
 [0,7],[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],
@@ -102,48 +98,48 @@ const TRACK=[
 [14,7],[14,6],[13,6],[12,6],[11,6],[10,6],[9,6],
 [8,5],[8,4],[8,3],[8,2],[8,1],[8,0],
 [7,0],[6,0]
-]
+];
 
-const START=[0,13,26,39]
+const START=[0,13,26,39];
 
-function px(r,c){return[c*40+9,r*40+9]}
+function px(r,c){return[c*40+9,r*40+9];}
 
 // ---------------- TOKENS ----------------
-let ALL_TOKENS=[]
+let ALL_TOKENS=[];
 
 class Token{
  constructor(p,x,y,color){
-  this.p=p
-  this.pos=-1
+  this.p=p;
+  this.pos=-1;
 
-  this.el=document.createElement("div")
-  this.el.className="token"
-  this.el.style.background=color
-  document.querySelector(".wrapper").appendChild(this.el)
+  this.el=document.createElement("div");
+  this.el.className="token";
+  this.el.style.background=color;
+  document.querySelector(".wrapper").appendChild(this.el);
 
-  this.start=[x,y]
-  this.update()
+  this.start=[x,y];
+  this.update();
 
-  this.el.onclick=()=>move(this)
+  this.el.onclick=()=>move(this,false);
 
-  ALL_TOKENS.push(this)
+  ALL_TOKENS.push(this);
  }
 
  update(){
   if(this.pos===-1){
-    this.el.style.left=this.start[0]+"px"
-    this.el.style.top=this.start[1]+"px"
+    this.el.style.left=this.start[0]+"px";
+    this.el.style.top=this.start[1]+"px";
   }else{
-    let [r,c]=TRACK[this.pos]
-    let [x,y]=px(r,c)
-    this.el.style.left=x+"px"
-    this.el.style.top=y+"px"
+    let [r,c]=TRACK[this.pos];
+    let [x,y]=px(r,c);
+    this.el.style.left=x+"px";
+    this.el.style.top=y+"px";
   }
  }
 }
 
 // ---------------- GAME ----------------
-const game={players:[],turn:0,dice:0}
+const game={players:[],turn:0,dice:0};
 
 function init(){
  game.players=[
@@ -151,78 +147,134 @@ function init(){
   makePlayer(1,"green",[420,80]),
   makePlayer(2,"yellow",[420,420]),
   makePlayer(3,"blue",[80,420])
- ]
+ ];
+ updateTurnUI();
 }
 function makePlayer(p,color,[x,y]){
- let arr=[]
+ let arr=[];
  for(let i=0;i<4;i++){
-  arr.push(new Token(p,x+(i%2)*50,y+Math.floor(i/2)*50,color))
+  arr.push(new Token(p,x+(i%2)*50,y+Math.floor(i/2)*50,color));
  }
- return arr
+ return arr;
 }
-init()
+init();
 
-// ---------------- CAPTURE (ONLY FIX) ----------------
-function captureAt(pos, movingToken){
-
-  ALL_TOKENS.forEach(t => {
-
-    if(t === movingToken) return;
-
-    // DIFFERENT PLAYER → SEND HOME
-    if(t.pos === pos && t.p !== movingToken.p){
-      t.pos = -1;
-      t.update();
-    }
-
-  });
-
+// ---------------- UI ----------------
+function updateTurnUI(){
+ ALL_TOKENS.forEach(t=>{
+  t.el.classList.remove("active","inactive");
+  if(t.p===game.turn) t.el.classList.add("active");
+  else t.el.classList.add("inactive");
+ });
+ turnEl.innerText=COLORS[game.turn]+" Player";
 }
 
-// ---------------- TURN ----------------
-function finishTurn(){
- if(game.dice!==6){
-  game.turn=(game.turn+1)%4
- }
- game.dice=0
- turnEl.innerText="Player "+(game.turn+1)
+// ---------------- CAPTURE (FIXED CORRECTLY) ----------------
+function captureAt(pos,mover){
+ ALL_TOKENS.forEach(t=>{
+  if(t===mover) return;
+
+  // DIFFERENT player → capture
+  if(t.pos===pos && t.p!==mover.p){
+    t.pos=-1;
+    t.update();
+  }
+ });
 }
 
 // ---------------- ROLL ----------------
 function rollDice(){
- if(game.dice!==0)return
- game.dice=Math.floor(Math.random()*6)+1
- diceEl.innerText=game.dice
+ if(game.dice!==0||isMoving) return;
+
+ game.dice=Math.floor(Math.random()*6)+1;
+ diceEl.innerText=game.dice;
+
+ let tokens=game.players[game.turn];
+ let hasToken=tokens.some(t=>t.pos!==-1);
+
+ // must roll 6 to start
+ if(!hasToken && game.dice!==6){
+  setTimeout(finishTurn,600);
+  return;
+ }
+
+ if(PLAYER_TYPES[game.turn]==="ai"){
+  setTimeout(aiPlay,600);
+ }
+}
+
+// ---------------- TURN ----------------
+function finishTurn(){
+ let last=game.dice;
+ game.dice=0;
+
+ // only pass if not 6
+ if(last!==6){
+  game.turn=(game.turn+1)%4;
+ }
+
+ updateTurnUI();
+
+ if(PLAYER_TYPES[game.turn]==="ai"){
+  setTimeout(rollDice,700);
+ }
 }
 
 // ---------------- MOVE ----------------
-async function move(t){
- if(t.p!==game.turn||game.dice===0)return
+async function move(t,isAI){
+ if(isMoving) return;
+ if(!isAI && PLAYER_TYPES[game.turn]==="ai") return;
+ if(t.p!==game.turn||game.dice===0) return;
+
+ isMoving=true;
 
  // FROM BASE
  if(t.pos===-1){
   if(game.dice===6){
-    t.pos=START[t.p]
-    t.update()
+    t.pos=START[t.p];
+    t.update();
 
-    // 🔥 capture happens here
-    captureAt(t.pos,t)
+    // capture at start
+    captureAt(t.pos,t);
+  }else{
+    isMoving=false;
+    finishTurn();
+    return;
   }
  }
  else{
   for(let i=0;i<game.dice;i++){
-    t.pos=(t.pos+1)%TRACK.length
-    t.update()
-    await new Promise(r=>setTimeout(r,100))
+    t.pos=(t.pos+1)%TRACK.length;
+    t.update();
+    await new Promise(r=>setTimeout(r,100));
   }
 
-  // 🔥 capture AFTER movement finishes
-  captureAt(t.pos,t)
+  // capture after full move
+  captureAt(t.pos,t);
  }
 
- finishTurn()
+ isMoving=false;
+ finishTurn();
 }
 
+// ---------------- AI ----------------
+function aiPlay(){
+ let tokens=game.players[game.turn];
+
+ let valid=tokens.filter(t=>{
+  if(t.pos===-1) return game.dice===6;
+  return true;
+ });
+
+ if(valid.length===0){
+  finishTurn();
+  return;
+ }
+
+ let choice=valid[Math.floor(Math.random()*valid.length)];
+
+ setTimeout(()=>move(choice,true),300);
+}
 </script>
 
 </body>
