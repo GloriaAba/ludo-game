@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo Board (Blockade Added)</title>
+<title>Ludo Board (Full System)</title>
 
 <style>
 body{
@@ -121,10 +121,18 @@ const TRACK=[ [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
 [7,0],[6,0] ]
 
 const START=[0,13,26,39]
+const TRACK_LENGTH=52
 
-// SAFE SQUARES
+// HOME PATHS
+const HOME_PATHS = [
+ [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]],
+ [[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]],
+ [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]],
+ [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]]
+]
+
+// SAFE
 const SAFE=[0,8,13,21,26,34,39,47]
-
 SAFE.forEach(i=>{
  let [r,c]=TRACK[i]
  board.children[r*15+c].classList.add("safe")
@@ -139,6 +147,8 @@ class Token{
  constructor(p,x,y,color){
   this.p=p
   this.pos=-1
+  this.steps=0
+  this.finished=false
 
   this.el=document.createElement("div")
   this.el.className="token"
@@ -157,7 +167,17 @@ class Token{
   if(this.pos===-1){
     this.el.style.left=this.start[0]+"px"
     this.el.style.top=this.start[1]+"px"
-  }else{
+  }
+  else if(this.steps>=TRACK_LENGTH){
+    let i=this.steps-TRACK_LENGTH
+    if(i<6){
+      let [r,c]=HOME_PATHS[this.p][i]
+      let [x,y]=px(r,c)
+      this.el.style.left=x+"px"
+      this.el.style.top=y+"px"
+    }
+  }
+  else{
     let [r,c]=TRACK[this.pos]
     let [x,y]=px(r,c)
     this.el.style.left=x+"px"
@@ -190,34 +210,23 @@ init()
 
 function sendHome(token){
  token.pos=-1
+ token.steps=0
  token.update()
 }
 
-// 🔥 BLOCKADE FUNCTION
-function isBlocked(pos, movingPlayer){
- let tokensAtPos = ALL_TOKENS.filter(t => t.pos === pos);
-
- if(tokensAtPos.length < 2) return false;
-
- let owner = tokensAtPos[0].p;
-
- if(tokensAtPos.every(t => t.p === owner)){
-  return owner !== movingPlayer;
- }
-
- return false;
+// BLOCKADE
+function isBlocked(pos,player){
+ let tokens=ALL_TOKENS.filter(t=>t.pos===pos)
+ if(tokens.length<2) return false
+ return tokens.every(t=>t.p===tokens[0].p) && tokens[0].p!==player
 }
 
 // CAPTURE
-function checkCapture(movingToken){
- if(SAFE.includes(movingToken.pos)) return
-
- ALL_TOKENS.forEach(other=>{
-  if(other === movingToken) return
-
-  if(other.pos === movingToken.pos){
-    if(other.p === movingToken.p) return
-    sendHome(other)
+function checkCapture(t){
+ if(SAFE.includes(t.pos)) return
+ ALL_TOKENS.forEach(o=>{
+  if(o!==t && o.pos===t.pos && o.p!==t.p){
+    sendHome(o)
   }
  })
 }
@@ -234,45 +243,48 @@ function finishTurn(){
 // DICE
 function rollDice(){
  if(game.dice!==0)return
-
  game.dice=Math.floor(Math.random()*6)+1
  diceEl.innerText=game.dice
-
- let player=game.players[game.turn]
- let hasToken=player.some(t=>t.pos!==-1)
-
- if(game.dice!==6 && !hasToken){
-  setTimeout(()=>finishTurn(),600)
- }
 }
 
 // MOVE
 async function move(t){
- if(t.p!==game.turn || game.dice===0)return
+ if(t.p!==game.turn||game.dice===0||t.finished)return
+
+ let dice=game.dice
 
  if(t.pos===-1){
-  if(game.dice===6){
+  if(dice===6){
     t.pos=START[t.p]
+    t.steps=0
     t.update()
     checkCapture(t)
   }
- }else{
-  for(let i=0;i<game.dice;i++){
-
-    let nextPos = (t.pos + 1) % TRACK.length;
-
-    // 🚫 BLOCKED
-    if(isBlocked(nextPos, t.p)){
-      break;
-    }
-
-    t.pos = nextPos;
-    t.update();
-
-    await new Promise(r=>setTimeout(r,100));
+ }
+ else{
+  if(t.steps+dice>TRACK_LENGTH+5){
+    finishTurn(); return
   }
 
-  checkCapture(t)
+  for(let i=0;i<dice;i++){
+    if(t.steps<TRACK_LENGTH){
+      let next=(t.pos+1)%TRACK.length
+      if(isBlocked(next,t.p)) break
+      t.pos=next
+    }
+    t.steps++
+    t.update()
+    await new Promise(r=>setTimeout(r,100))
+  }
+
+  if(t.steps===TRACK_LENGTH+5){
+    t.finished=true
+    t.el.style.display="none"
+  }
+
+  if(t.steps<TRACK_LENGTH){
+    checkCapture(t)
+  }
  }
 
  finishTurn()
