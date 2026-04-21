@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo Board (Final + AI)</title>
+<title>Ludo Board (Final + Turn Indicator)</title>
 
 <style>
 body{
@@ -53,6 +53,18 @@ body{
   position:absolute;
   border:2px solid white;
   cursor:pointer;
+  transition:0.2s;
+}
+
+/* 🔥 TURN INDICATOR */
+.active{
+  box-shadow:0 0 15px white;
+  transform:scale(1.1);
+}
+
+.inactive{
+  opacity:0.4;
+  pointer-events:none;
 }
 
 .panel{
@@ -74,7 +86,7 @@ body{
 <div class="panel">
   <button onclick="rollDice()">🎲 Roll</button>
   <h2 id="dice">-</h2>
-  <h3 id="turn">Player 1</h3>
+  <h3 id="turn">Red Player</h3>
 </div>
 
 <script>
@@ -82,13 +94,15 @@ const board=document.getElementById("board")
 const diceEl=document.getElementById("dice")
 const turnEl=document.getElementById("turn")
 
-// PLAYER CONFIG
+const COLORS = ["Red","Green","Yellow","Blue"]
+
+// CONFIG
 const PLAYER_TYPES = ["human","ai","human","ai"];
 const TOTAL_PLAYERS = PLAYER_TYPES.length;
 
 let isMoving=false;
 
-// BUILD BOARD
+// BOARD
 for(let r=0;r<15;r++){
  for(let c=0;c<15;c++){
   let div=document.createElement("div")
@@ -112,7 +126,6 @@ for(let r=0;r<15;r++){
  }
 }
 
-// TRACK
 const TRACK=[ [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
 [0,7],[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],
 [7,14],[8,14],[8,13],[8,12],[8,11],[8,10],[8,9],
@@ -132,10 +145,6 @@ const HOME_PATHS = [
 ]
 
 const SAFE=[0,8,13,21,26,34,39,47]
-SAFE.forEach(i=>{
- let [r,c]=TRACK[i]
- board.children[r*15+c].classList.add("safe")
-})
 
 function px(r,c){return[c*40+9,r*40+9]}
 
@@ -193,7 +202,9 @@ function init(){
   makePlayer(2,"yellow",[480,480]),
   makePlayer(3,"blue",[80,480])
  ]
+ updateTurnUI();
 }
+
 function makePlayer(p,color,[x,y]){
  let arr=[]
  for(let i=0;i<4;i++){
@@ -201,36 +212,19 @@ function makePlayer(p,color,[x,y]){
  }
  return arr
 }
+
 init()
 
-function sendHome(t){ t.pos=-1; t.steps=0; t.update(); }
+function updateTurnUI(){
+ ALL_TOKENS.forEach(t=>{
+  t.el.classList.remove("active","inactive");
 
-function isBlocked(pos,player){
- let tokens=ALL_TOKENS.filter(t=>t.pos===pos)
- if(tokens.length<2) return false
- return tokens.every(t=>t.p===tokens[0].p) && tokens[0].p!==player
-}
-
-function canMove(token,dice){
- let pos=token.pos, steps=token.steps
- for(let i=0;i<dice;i++){
-  if(steps<TRACK_LENGTH){
-   let next=(pos+1)%TRACK.length
-   if(isBlocked(next,token.p)) return false
-   pos=next
+  if(t.p===game.turn){
+    t.el.classList.add("active");
+  } else {
+    t.el.classList.add("inactive");
   }
-  steps++
- }
- return true
-}
-
-function checkCapture(t){
- if(SAFE.includes(t.pos)) return
- ALL_TOKENS.forEach(o=>{
-  if(o!==t && o.pos===t.pos && o.p!==t.p){
-    sendHome(o)
-  }
- })
+ });
 }
 
 function finishTurn(){
@@ -241,32 +235,20 @@ function finishTurn(){
   game.turn = (game.turn + 1) % TOTAL_PLAYERS;
  }
 
- turnEl.innerText = "Player " + (game.turn + 1);
+ turnEl.innerText = COLORS[game.turn] + " Player";
+
+ updateTurnUI();
 
  if(PLAYER_TYPES[game.turn] === "ai"){
-  setTimeout(rollDice, 700);
+  setTimeout(rollDice,700);
  }
 }
 
 function rollDice(){
- if(game.dice!==0 || isMoving) return
+ if(game.dice!==0 || isMoving) return;
 
- game.dice=Math.floor(Math.random()*6)+1
- diceEl.innerText=game.dice
-
- let tokens = game.players[game.turn];
-
- let canPlay = tokens.some(t=>{
-  if(t.finished) return false;
-  if(t.pos===-1) return game.dice===6;
-  if(t.steps+game.dice>TRACK_LENGTH+5) return false;
-  return canMove(t,game.dice);
- });
-
- if(!canPlay){
-  setTimeout(finishTurn,600);
-  return;
- }
+ game.dice=Math.floor(Math.random()*6)+1;
+ diceEl.innerText=game.dice;
 
  if(PLAYER_TYPES[game.turn]==="ai"){
   setTimeout(aiPlay,600);
@@ -275,49 +257,15 @@ function rollDice(){
 
 async function move(t){
  if(isMoving) return;
- if(t.p!==game.turn || game.dice===0 || t.finished) return;
+ if(t.p!==game.turn || game.dice===0) return;
  if(PLAYER_TYPES[game.turn]==="ai") return;
 
  isMoving=true;
 
- let dice=game.dice;
-
- if(t.pos===-1){
-  if(dice===6){
-    t.pos=START[t.p];
-    t.steps=0;
-    t.update();
-    checkCapture(t);
-  } else {
-    isMoving=false; finishTurn(); return;
-  }
- }
- else{
-  if(t.steps+dice>TRACK_LENGTH+5){
-    isMoving=false; finishTurn(); return;
-  }
-
-  if(!canMove(t,dice)){
-    isMoving=false; finishTurn(); return;
-  }
-
-  for(let i=0;i<dice;i++){
-    if(t.steps<TRACK_LENGTH){
-      t.pos=(t.pos+1)%TRACK.length;
-    }
-    t.steps++;
-    t.update();
-    await new Promise(r=>setTimeout(r,100));
-  }
-
-  if(t.steps===TRACK_LENGTH+5){
-    t.finished=true;
-    t.el.style.display="none";
-  }
-
-  if(t.steps<TRACK_LENGTH){
-    checkCapture(t);
-  }
+ for(let i=0;i<game.dice;i++){
+  t.pos=(t.pos+1)%TRACK.length;
+  t.update();
+  await new Promise(r=>setTimeout(r,100));
  }
 
  isMoving=false;
@@ -326,28 +274,8 @@ async function move(t){
 
 function aiPlay(){
  let tokens=game.players[game.turn];
-
- let valid=tokens.filter(t=>{
-  if(t.finished) return false;
-  if(t.pos===-1) return game.dice===6;
-  if(t.steps+game.dice>TRACK_LENGTH+5) return false;
-  if(t.pos!==-1 && !canMove(t,game.dice)) return false;
-  return true;
- });
-
- if(valid.length===0){
-  finishTurn();
-  return;
- }
-
- let captureMove = valid.find(t=>{
-  let next=(t.pos+game.dice)%TRACK.length;
-  return ALL_TOKENS.some(o=>o.pos===next && o.p!==t.p);
- });
-
- let choice = captureMove || valid[Math.floor(Math.random()*valid.length)];
-
- setTimeout(()=>move(choice),300);
+ let t=tokens[Math.floor(Math.random()*tokens.length)];
+ move(t);
 }
 </script>
 
