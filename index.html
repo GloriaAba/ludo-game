@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo (Final Rules Fixed)</title>
+<title>Ludo Fixed</title>
 
 <style>
 body{
@@ -23,10 +23,16 @@ body{
 }
 
 .cell{
-  width:40px;height:40px;
+  width:40px;
+  height:40px;
   border:1px solid #333;
   background:#eee;
 }
+
+.red-base{background:#e74c3c}
+.green-base{background:#27ae60}
+.blue-base{background:#3498db}
+.yellow-base{background:#f1c40f}
 
 .center{background:#222;}
 
@@ -52,31 +58,36 @@ body{
 <div class="panel">
   <button onclick="rollDice()">🎲 Roll</button>
   <h2 id="dice">-</h2>
-  <h3 id="turn">Red Player</h3>
+  <h3 id="turn">Player 1</h3>
 </div>
 
 <script>
+
 const board=document.getElementById("board")
 const diceEl=document.getElementById("dice")
 const turnEl=document.getElementById("turn")
 
-const COLORS=["Red","Green","Yellow","Blue"]
-const PLAYER_TYPES=["human","ai","human","human"]
-
-let isMoving=false
+const PLAYER_TYPES=["human","ai","human","ai"]
 
 // -------- BOARD --------
 for(let r=0;r<15;r++){
  for(let c=0;c<15;c++){
   let d=document.createElement("div")
   d.className="cell"
-  if(r>=6&&r<=8&&c>=6&&c<=8) d.classList.add("center")
+
+  if(r<6 && c<6) d.classList.add("red-base")
+  else if(r<6 && c>8) d.classList.add("green-base")
+  else if(r>8 && c<6) d.classList.add("blue-base")
+  else if(r>8 && c>8) d.classList.add("yellow-base")
+
+  if(r>=6 && r<=8 && c>=6 && c<=8) d.classList.add("center")
+
   board.appendChild(d)
  }
 }
 
 // -------- TRACK --------
-const TRACK=[ /* unchanged */ 
+const TRACK=[
 [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
 [0,7],[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],
 [7,14],[8,14],[8,13],[8,12],[8,11],[8,10],[8,9],
@@ -88,14 +99,6 @@ const TRACK=[ /* unchanged */
 
 const START=[0,13,26,39]
 
-// HOME PATHS
-const HOME_PATHS=[
- [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]],
- [[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]],
- [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]],
- [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]]
-]
-
 function px(r,c){return[c*40+9,r*40+9]}
 
 // -------- TOKENS --------
@@ -105,8 +108,6 @@ class Token{
  constructor(p,x,y,color){
   this.p=p
   this.pos=-1
-  this.steps=0
-  this.finished=false
 
   this.el=document.createElement("div")
   this.el.className="token"
@@ -122,19 +123,9 @@ class Token{
 
  update(){
   if(this.pos===-1){
-    this.el.style.left=this.start[0]+"px
-    this.el.style.top=this.start[1]+"px
-  }
-  else if(this.steps>=52){
-    let i=this.steps-52
-    if(i<6){
-      let [r,c]=HOME_PATHS[this.p][i]
-      let [x,y]=px(r,c)
-      this.el.style.left=x+"px"
-      this.el.style.top=y+"px"
-    }
-  }
-  else{
+    this.el.style.left=this.start[0]+"px"
+    this.el.style.top=this.start[1]+"px"
+  }else{
     let [r,c]=TRACK[this.pos]
     let [x,y]=px(r,c)
     this.el.style.left=x+"px"
@@ -167,12 +158,7 @@ function makePlayer(p,color,[x,y]){
 init()
 
 function updateUI(){
- ALL_TOKENS.forEach(t=>{
-  t.el.classList.remove("active","inactive")
-  if(t.p===game.turn) t.el.classList.add("active")
-  else t.el.classList.add("inactive")
- })
- turnEl.innerText=COLORS[game.turn]+" Player"
+ turnEl.innerText="Player "+(game.turn+1)
 }
 
 // -------- BLOCKADE --------
@@ -181,93 +167,79 @@ function isBlockade(pos,player){
  return tokens.length>=2 && tokens.every(t=>t.p===tokens[0].p) && tokens[0].p!==player
 }
 
-// -------- CAPTURE --------
-function capture(pos,mover){
- let tokens=ALL_TOKENS.filter(t=>t.pos===pos && t!==mover)
- if(tokens.length===1 && tokens[0].p!==mover.p){
-  tokens[0].pos=-1
-  tokens[0].steps=0
-  tokens[0].update()
- }
-}
-
-// -------- MOVE VALIDATION --------
+// -------- VALID MOVE --------
 function canMove(t,dice){
  let pos=t.pos
- let steps=t.steps
-
  for(let i=0;i<dice;i++){
-  if(steps<52){
-   let next=(pos+1)%TRACK.length
-   if(isBlockade(next,t.p)) return false
-   pos=next
-  }
-  steps++
+  let next=(pos+1)%TRACK.length
+  if(isBlockade(next,t.p)) return false
+  pos=next
  }
  return true
 }
 
+// -------- CAPTURE --------
+function captureAt(pos,mover){
+ let tokens=ALL_TOKENS.filter(t=>t.pos===pos && t!==mover)
+
+ if(tokens.length!==1) return
+
+ let target=tokens[0]
+ if(target.p!==mover.p){
+  target.pos=-1
+  target.update()
+ }
+}
+
 // -------- MOVE --------
-async function move(t,isAI){
- if(isMoving) return
- if(!isAI && PLAYER_TYPES[game.turn]==="ai") return
- if(t.p!==game.turn||game.dice===0||t.finished) return
+function move(t,isAI){
+ if(t.p!==game.turn||game.dice===0) return
 
  if(!canMove(t,game.dice)){
   finishTurn()
   return
  }
 
- isMoving=true
-
  if(t.pos===-1){
   if(game.dice===6){
     t.pos=START[t.p]
-    t.steps=0
     t.update()
-    capture(t.pos,t)
+    captureAt(t.pos,t)
+  }else{
+    finishTurn()
+    return
   }
  }
  else{
-  for(let i=0;i<game.dice;i++){
-    if(t.steps<52){
-      t.pos=(t.pos+1)%TRACK.length
-    }
-    t.steps++
-    t.update()
-    await new Promise(r=>setTimeout(r,80))
-  }
-
-  if(t.steps===58){
-    t.finished=true
-    t.el.style.display="none"
-  }
-
-  if(t.steps<52){
-    capture(t.pos,t)
-  }
+  t.pos=(t.pos+game.dice)%TRACK.length
+  t.update()
+  captureAt(t.pos,t)
  }
 
- isMoving=false
  finishTurn()
 }
 
 // -------- ROLL --------
 function rollDice(){
- if(game.dice!==0||isMoving) return
+ if(game.dice!==0) return
+
  game.dice=Math.floor(Math.random()*6)+1
  diceEl.innerText=game.dice
 
  let tokens=game.players[game.turn]
- let valid=tokens.some(t=>!t.finished && (t.pos!==-1||game.dice===6) && canMove(t,game.dice))
+
+ let valid=tokens.some(t=>{
+  if(t.pos===-1) return game.dice===6
+  return canMove(t,game.dice)
+ })
 
  if(!valid){
-  setTimeout(finishTurn,200)
+  finishTurn()
   return
  }
 
  if(PLAYER_TYPES[game.turn]==="ai"){
-  setTimeout(aiPlay,200)
+  aiPlay()
  }
 }
 
@@ -275,19 +247,26 @@ function rollDice(){
 function finishTurn(){
  let last=game.dice
  game.dice=0
+
  if(last!==6){
   game.turn=(game.turn+1)%4
  }
+
  updateUI()
+
  if(PLAYER_TYPES[game.turn]==="ai"){
-  setTimeout(rollDice,300)
+  rollDice()
  }
 }
 
 // -------- AI --------
 function aiPlay(){
  let tokens=game.players[game.turn]
- let valid=tokens.filter(t=>!t.finished && (t.pos!==-1||game.dice===6) && canMove(t,game.dice))
+
+ let valid=tokens.filter(t=>{
+  if(t.pos===-1) return game.dice===6
+  return canMove(t,game.dice)
+ })
 
  if(valid.length===0){
   finishTurn()
@@ -297,6 +276,7 @@ function aiPlay(){
  let choice=valid[Math.floor(Math.random()*valid.length)]
  move(choice,true)
 }
+
 </script>
 
 </body>
