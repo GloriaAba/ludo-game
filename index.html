@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo Online (Realtime)</title>
+<title>Ludo (Fixed Capture)</title>
 
 <style>
 body{
@@ -41,10 +41,11 @@ body{
   border-radius:50%;
   position:absolute;
   border:2px solid white;
+  cursor:pointer;
 }
 
 .active{box-shadow:0 0 15px white;}
-.inactive{opacity:0.4;}
+.inactive{opacity:0.4; pointer-events:none;}
 
 .panel{color:white;}
 </style>
@@ -59,36 +60,19 @@ body{
 <div class="panel">
   <button onclick="rollDice()">🎲 Roll</button>
   <h2 id="dice">-</h2>
-  <h3 id="turn">Loading...</h3>
+  <h3 id="turn">Red Player</h3>
 </div>
 
-<script type="module">
+<script>
 
-// 🔥 IMPORT FIREBASE
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-// 🔥 YOUR FIREBASE CONFIG (REPLACE THIS)
-const firebaseConfig = {
-  apiKey: "YOUR_KEY",
-  authDomain: "YOUR_DOMAIN",
-  databaseURL: "YOUR_DB_URL",
-  projectId: "YOUR_ID"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
-// 🔥 ROOM
-const roomId = "ludo-room-1";
-const gameRef = ref(db, "games/" + roomId);
-
-// ---------------- UI ----------------
+// ---------------- BASIC SETUP ----------------
 const board=document.getElementById("board")
 const diceEl=document.getElementById("dice")
 const turnEl=document.getElementById("turn")
 
 const COLORS=["Red","Green","Yellow","Blue"]
+
+let isMoving=false
 
 // ---------------- BOARD ----------------
 for(let r=0;r<15;r++){
@@ -131,6 +115,8 @@ class Token{
   this.start=[x,y]
   this.update()
 
+  this.el.onclick=()=>move(this)
+
   ALL_TOKENS.push(this)
  }
 
@@ -147,96 +133,120 @@ class Token{
  }
 }
 
-// INIT TOKENS
-function createTokens(){
- let positions=[[80,80],[480,80],[480,480],[80,480]]
- let colors=["red","green","yellow","blue"]
+// ---------------- GAME ----------------
+const game={players:[],turn:0,dice:0}
 
- for(let p=0;p<4;p++){
-  for(let i=0;i<4;i++){
-    new Token(p,
-      positions[p][0]+(i%2)*50,
-      positions[p][1]+Math.floor(i/2)*50,
-      colors[p]
-    )
-  }
+function init(){
+ game.players=[
+  makePlayer(0,"red",[80,80]),
+  makePlayer(1,"green",[480,80]),
+  makePlayer(2,"yellow",[480,480]),
+  makePlayer(3,"blue",[80,480])
+ ]
+ updateTurnUI()
+}
+
+function makePlayer(p,color,[x,y]){
+ let arr=[]
+ for(let i=0;i<4;i++){
+  arr.push(new Token(p,x+(i%2)*50,y+Math.floor(i/2)*50,color))
  }
+ return arr
 }
 
-createTokens()
+init()
 
-// ---------------- STATE ----------------
-let game={turn:0,dice:0}
-
-// ---------------- FIREBASE SYNC ----------------
-
-// listen for updates
-onValue(gameRef, snapshot=>{
- let data=snapshot.val()
- if(!data) return
-
- game.turn=data.turn
- game.dice=data.dice
-
- diceEl.innerText=data.dice
- turnEl.innerText=COLORS[game.turn]+" Player"
-
- data.tokens.forEach((t,i)=>{
-  ALL_TOKENS[i].pos=t.pos
-  ALL_TOKENS[i].update()
- })
-})
-
-// save state
-function saveGame(){
- set(gameRef,{
-  turn:game.turn,
-  dice:game.dice,
-  tokens:ALL_TOKENS.map(t=>({p:t.p,pos:t.pos}))
+// ---------------- UI ----------------
+function updateTurnUI(){
+ ALL_TOKENS.forEach(t=>{
+  t.el.classList.remove("active","inactive")
+  if(t.p===game.turn) t.el.classList.add("active")
+  else t.el.classList.add("inactive")
  })
 }
 
-// ---------------- GAME LOGIC ----------------
+// ---------------- CAPTURE (FIXED) ----------------
+function captureAt(pos, movingToken){
+  ALL_TOKENS.forEach(t => {
 
-// roll dice
-window.rollDice=function(){
- if(game.dice!==0) return
+    // skip itself
+    if(t === movingToken) return;
+
+    // DIFFERENT PLAYER → CAPTURE
+    if(t.pos === pos && t.p !== movingToken.p){
+      t.pos = -1;
+      t.update();
+    }
+
+  });
+}
+
+// ---------------- ROLL ----------------
+function rollDice(){
+ if(game.dice!==0||isMoving) return
 
  game.dice=Math.floor(Math.random()*6)+1
- saveGame()
+ diceEl.innerText=game.dice
+
+ let tokens=game.players[game.turn]
+ let hasToken=tokens.some(t=>t.pos!==-1)
+
+ // must roll 6 to start
+ if(!hasToken && game.dice!==6){
+  setTimeout(finishTurn,600)
+ }
 }
 
-// move token
-window.moveToken=function(index){
- if(game.dice===0) return
-
- let t=ALL_TOKENS[index]
-
- if(t.pos===-1){
-  if(game.dice===6){
-    t.pos=START[t.p]
-  }else{
-    nextTurn()
-    return
-  }
- }
- else{
-  t.pos=(t.pos+game.dice)%TRACK.length
- }
-
- nextTurn()
-}
-
-// next turn
-function nextTurn(){
+// ---------------- TURN ----------------
+function finishTurn(){
  let last=game.dice
+ game.dice=0
 
  if(last!==6){
   game.turn=(game.turn+1)%4
  }
 
- game.dice=0
- saveGame()
+ turnEl.innerText=COLORS[game.turn]+" Player"
+ updateTurnUI()
+}
+
+// ---------------- MOVE ----------------
+async function move(t){
+ if(isMoving) return
+ if(t.p!==game.turn||game.dice===0) return
+
+ isMoving=true
+
+ // FROM BASE
+ if(t.pos===-1){
+  if(game.dice===6){
+    t.pos=START[t.p]
+    t.update()
+
+    // capture check immediately
+    captureAt(t.pos, t)
+
+  } else {
+    isMoving=false
+    finishTurn()
+    return
+  }
+ }
+
+ // NORMAL MOVE
+ else{
+  for(let i=0;i<game.dice;i++){
+    t.pos=(t.pos+1)%TRACK.length
+    t.update()
+    await new Promise(r=>setTimeout(r,100))
+  }
+
+  // capture AFTER full move
+  captureAt(t.pos, t)
+ }
+
+ isMoving=false
+ finishTurn()
 }
 
 </script>
