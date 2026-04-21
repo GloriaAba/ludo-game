@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo (Turn Logic Fixed)</title>
+<title>Ludo (Fixed AI & Turns)</title>
 
 <style>
 body{
@@ -47,12 +47,10 @@ body{
   position:absolute;
   border:2px solid white;
   cursor:pointer;
-  transition:0.2s;
 }
 
 .active{
   box-shadow:0 0 15px white;
-  transform:scale(1.1);
 }
 
 .inactive{
@@ -62,10 +60,6 @@ body{
 
 .panel{
   color:white;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:10px;
 }
 </style>
 </head>
@@ -89,7 +83,7 @@ const turnEl=document.getElementById("turn")
 
 const COLORS=["Red","Green","Yellow","Blue"]
 
-// CONFIG (edit here)
+// CONFIG
 const PLAYER_TYPES=["human","ai","human","human"]
 const TOTAL_PLAYERS=PLAYER_TYPES.length
 
@@ -144,7 +138,7 @@ class Token{
   this.start=[x,y]
   this.update()
 
-  this.el.onclick=()=>move(this)
+  this.el.onclick=()=>move(this,false)
 
   ALL_TOKENS.push(this)
  }
@@ -174,6 +168,7 @@ function init(){
  ]
  updateTurnUI()
 }
+
 function makePlayer(p,color,[x,y]){
  let arr=[]
  for(let i=0;i<4;i++){
@@ -181,6 +176,7 @@ function makePlayer(p,color,[x,y]){
  }
  return arr
 }
+
 init()
 
 function updateTurnUI(){
@@ -194,7 +190,7 @@ function updateTurnUI(){
  })
 }
 
-// 🎲 ROLL (FIXED RULE HERE)
+// ROLL
 function rollDice(){
  if(game.dice!==0||isMoving) return
 
@@ -202,11 +198,10 @@ function rollDice(){
  diceEl.innerText=game.dice
 
  let tokens=game.players[game.turn]
-
- let hasTokenOut=tokens.some(t=>t.pos!==-1)
+ let hasToken=tokens.some(t=>t.pos!==-1)
 
  // ❗ KEY RULE
- if(!hasTokenOut && game.dice!==6){
+ if(!hasToken && game.dice!==6){
   setTimeout(finishTurn,600)
   return
  }
@@ -216,12 +211,12 @@ function rollDice(){
  }
 }
 
-// 🔄 TURN
+// TURN
 function finishTurn(){
- let lastDice=game.dice
+ let last=game.dice
  game.dice=0
 
- if(lastDice!==6){
+ if(last!==6){
   game.turn=(game.turn+1)%TOTAL_PLAYERS
  }
 
@@ -233,11 +228,12 @@ function finishTurn(){
  }
 }
 
-// 🟢 MOVE (FIXED START LOGIC)
-async function move(t){
+// MOVE (FIXED)
+async function move(t,isAI){
  if(isMoving) return
+
+ if(!isAI && PLAYER_TYPES[game.turn]==="ai") return
  if(t.p!==game.turn||game.dice===0) return
- if(PLAYER_TYPES[game.turn]==="ai") return
 
  isMoving=true
 
@@ -252,7 +248,6 @@ async function move(t){
     return
   }
  }
-
  else{
   for(let i=0;i<game.dice;i++){
     t.pos=(t.pos+1)%TRACK.length
@@ -265,7 +260,7 @@ async function move(t){
  finishTurn()
 }
 
-// 🤖 AI
+// AI
 function aiPlay(){
  let tokens=game.players[game.turn]
 
@@ -280,7 +275,8 @@ function aiPlay(){
  }
 
  let choice=valid[Math.floor(Math.random()*valid.length)]
- setTimeout(()=>move(choice),300)
+
+ setTimeout(()=>move(choice,true),300)
 }
 </script>
 
