@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo Board (Final Rules)</title>
+<title>Ludo Board (Final + AI)</title>
 
 <style>
 body{
@@ -81,6 +81,12 @@ body{
 const board=document.getElementById("board")
 const diceEl=document.getElementById("dice")
 const turnEl=document.getElementById("turn")
+
+// PLAYER CONFIG
+const PLAYER_TYPES = ["human","ai","human","ai"];
+const TOTAL_PLAYERS = PLAYER_TYPES.length;
+
+let isMoving=false;
 
 // BUILD BOARD
 for(let r=0;r<15;r++){
@@ -188,7 +194,6 @@ function init(){
   makePlayer(3,"blue",[80,480])
  ]
 }
-
 function makePlayer(p,color,[x,y]){
  let arr=[]
  for(let i=0;i<4;i++){
@@ -196,14 +201,9 @@ function makePlayer(p,color,[x,y]){
  }
  return arr
 }
-
 init()
 
-function sendHome(token){
- token.pos=-1
- token.steps=0
- token.update()
-}
+function sendHome(t){ t.pos=-1; t.steps=0; t.update(); }
 
 function isBlocked(pos,player){
  let tokens=ALL_TOKENS.filter(t=>t.pos===pos)
@@ -211,16 +211,13 @@ function isBlocked(pos,player){
  return tokens.every(t=>t.p===tokens[0].p) && tokens[0].p!==player
 }
 
-// 🔥 STRICT BLOCKADE CHECK
 function canMove(token,dice){
- let pos=token.pos
- let steps=token.steps
-
+ let pos=token.pos, steps=token.steps
  for(let i=0;i<dice;i++){
   if(steps<TRACK_LENGTH){
-    let next=(pos+1)%TRACK.length
-    if(isBlocked(next,token.p)) return false
-    pos=next
+   let next=(pos+1)%TRACK.length
+   if(isBlocked(next,token.p)) return false
+   pos=next
   }
   steps++
  }
@@ -237,62 +234,120 @@ function checkCapture(t){
 }
 
 function finishTurn(){
- if(game.dice!==6){
-  game.turn=(game.turn+1)%4
+ let lastDice = game.dice;
+ game.dice = 0;
+
+ if(lastDice !== 6){
+  game.turn = (game.turn + 1) % TOTAL_PLAYERS;
  }
- game.dice=0
- turnEl.innerText="Player "+(game.turn+1)
+
+ turnEl.innerText = "Player " + (game.turn + 1);
+
+ if(PLAYER_TYPES[game.turn] === "ai"){
+  setTimeout(rollDice, 700);
+ }
 }
 
 function rollDice(){
- if(game.dice!==0)return
+ if(game.dice!==0 || isMoving) return
+
  game.dice=Math.floor(Math.random()*6)+1
  diceEl.innerText=game.dice
+
+ let tokens = game.players[game.turn];
+
+ let canPlay = tokens.some(t=>{
+  if(t.finished) return false;
+  if(t.pos===-1) return game.dice===6;
+  if(t.steps+game.dice>TRACK_LENGTH+5) return false;
+  return canMove(t,game.dice);
+ });
+
+ if(!canPlay){
+  setTimeout(finishTurn,600);
+  return;
+ }
+
+ if(PLAYER_TYPES[game.turn]==="ai"){
+  setTimeout(aiPlay,600);
+ }
 }
 
 async function move(t){
- if(t.p!==game.turn||game.dice===0||t.finished)return
+ if(isMoving) return;
+ if(t.p!==game.turn || game.dice===0 || t.finished) return;
+ if(PLAYER_TYPES[game.turn]==="ai") return;
 
- let dice=game.dice
+ isMoving=true;
+
+ let dice=game.dice;
 
  if(t.pos===-1){
   if(dice===6){
-    t.pos=START[t.p]
-    t.steps=0
-    t.update()
-    checkCapture(t)
+    t.pos=START[t.p];
+    t.steps=0;
+    t.update();
+    checkCapture(t);
+  } else {
+    isMoving=false; finishTurn(); return;
   }
  }
  else{
-
   if(t.steps+dice>TRACK_LENGTH+5){
-    finishTurn(); return
+    isMoving=false; finishTurn(); return;
   }
 
   if(!canMove(t,dice)){
-    finishTurn(); return
+    isMoving=false; finishTurn(); return;
   }
 
   for(let i=0;i<dice;i++){
     if(t.steps<TRACK_LENGTH){
-      t.pos=(t.pos+1)%TRACK.length
+      t.pos=(t.pos+1)%TRACK.length;
     }
-    t.steps++
-    t.update()
-    await new Promise(r=>setTimeout(r,100))
+    t.steps++;
+    t.update();
+    await new Promise(r=>setTimeout(r,100));
   }
 
   if(t.steps===TRACK_LENGTH+5){
-    t.finished=true
-    t.el.style.display="none"
+    t.finished=true;
+    t.el.style.display="none";
   }
 
   if(t.steps<TRACK_LENGTH){
-    checkCapture(t)
+    checkCapture(t);
   }
  }
 
- finishTurn()
+ isMoving=false;
+ finishTurn();
+}
+
+function aiPlay(){
+ let tokens=game.players[game.turn];
+
+ let valid=tokens.filter(t=>{
+  if(t.finished) return false;
+  if(t.pos===-1) return game.dice===6;
+  if(t.steps+game.dice>TRACK_LENGTH+5) return false;
+  if(t.pos!==-1 && !canMove(t,game.dice)) return false;
+  return true;
+ });
+
+ if(valid.length===0){
+  finishTurn();
+  return;
+ }
+
+ let captureMove = valid.find(t=>{
+  let next=(t.pos+game.dice)%TRACK.length;
+  return ALL_TOKENS.some(o=>o.pos===next && o.p!==t.p);
+ });
+
+ let choice = captureMove || valid[Math.floor(Math.random()*valid.length)];
+
+ setTimeout(()=>move(choice),300);
 }
 </script>
 
