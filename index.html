@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo (Fixed AI & Turns)</title>
+<title>Ludo (Final Stable AI + Turns)</title>
 
 <style>
 body{
@@ -190,7 +190,7 @@ function updateTurnUI(){
  })
 }
 
-// ROLL
+// 🎲 ROLL
 function rollDice(){
  if(game.dice!==0||isMoving) return
 
@@ -200,7 +200,6 @@ function rollDice(){
  let tokens=game.players[game.turn]
  let hasToken=tokens.some(t=>t.pos!==-1)
 
- // ❗ KEY RULE
  if(!hasToken && game.dice!==6){
   setTimeout(finishTurn,600)
   return
@@ -211,11 +210,12 @@ function rollDice(){
  }
 }
 
-// TURN
+// 🔄 TURN
 function finishTurn(){
  let last=game.dice
  game.dice=0
 
+ // ❗ stay on same player if 6
  if(last!==6){
   game.turn=(game.turn+1)%TOTAL_PLAYERS
  }
@@ -223,21 +223,20 @@ function finishTurn(){
  turnEl.innerText=COLORS[game.turn]+" Player"
  updateTurnUI()
 
+ // 🔥 AI keeps going automatically
  if(PLAYER_TYPES[game.turn]==="ai"){
   setTimeout(rollDice,700)
  }
 }
 
-// MOVE (FIXED)
+// 🟢 MOVE
 async function move(t,isAI){
  if(isMoving) return
-
  if(!isAI && PLAYER_TYPES[game.turn]==="ai") return
  if(t.p!==game.turn||game.dice===0) return
 
  isMoving=true
 
- // FROM BASE
  if(t.pos===-1){
   if(game.dice===6){
     t.pos=START[t.p]
@@ -260,7 +259,7 @@ async function move(t,isAI){
  finishTurn()
 }
 
-// AI
+// 🤖 AI
 function aiPlay(){
  let tokens=game.players[game.turn]
 
