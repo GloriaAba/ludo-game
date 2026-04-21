@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo (Stable: AI + Turns + Capture)</title>
+<title>Ludo Stable</title>
 
 <style>
 body{
@@ -13,19 +13,22 @@ body{
   margin:0;
   gap:20px;
 }
+
 .wrapper{ position:relative; }
+
 #board{
   display:grid;
   grid-template-columns:repeat(15,40px);
   grid-template-rows:repeat(15,40px);
 }
+
 .cell{
-  width:40px;height:40px;
+  width:40px;
+  height:40px;
   border:1px solid #333;
   background:#eee;
 }
 
-/* bases (kept simple) */
 .red-base{background:#e74c3c}
 .green-base{background:#27ae60}
 .blue-base{background:#3498db}
@@ -34,11 +37,15 @@ body{
 .center{background:#222;}
 
 .token{
-  width:22px;height:22px;border-radius:50%;
-  position:absolute;border:2px solid white;
-  cursor:pointer; transition:0.2s;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  position:absolute;
+  border:2px solid white;
+  cursor:pointer;
 }
-.active{ box-shadow:0 0 15px #fff; }
+
+.active{ box-shadow:0 0 15px white; }
 .inactive{ opacity:0.4; pointer-events:none; }
 
 .panel{ color:white; }
@@ -58,15 +65,14 @@ body{
 </div>
 
 <script>
-// ---------------- UI ----------------
+
+// ---------------- SETUP ----------------
 const board=document.getElementById("board");
 const diceEl=document.getElementById("dice");
 const turnEl=document.getElementById("turn");
 
 const COLORS=["Red","Green","Yellow","Blue"];
-
-// CHANGE HERE: who is AI
-const PLAYER_TYPES=["human","ai","human","ai"];
+const PLAYER_TYPES=["human","ai","human","human"];
 
 let isMoving=false;
 
@@ -150,6 +156,7 @@ function init(){
  ];
  updateTurnUI();
 }
+
 function makePlayer(p,color,[x,y]){
  let arr=[];
  for(let i=0;i<4;i++){
@@ -157,6 +164,7 @@ function makePlayer(p,color,[x,y]){
  }
  return arr;
 }
+
 init();
 
 // ---------------- UI ----------------
@@ -169,12 +177,10 @@ function updateTurnUI(){
  turnEl.innerText=COLORS[game.turn]+" Player";
 }
 
-// ---------------- CAPTURE (FIXED CORRECTLY) ----------------
+// ---------------- CAPTURE ----------------
 function captureAt(pos,mover){
  ALL_TOKENS.forEach(t=>{
   if(t===mover) return;
-
-  // DIFFERENT player → capture
   if(t.pos===pos && t.p!==mover.p){
     t.pos=-1;
     t.update();
@@ -192,14 +198,13 @@ function rollDice(){
  let tokens=game.players[game.turn];
  let hasToken=tokens.some(t=>t.pos!==-1);
 
- // must roll 6 to start
  if(!hasToken && game.dice!==6){
-  setTimeout(finishTurn,600);
+  finishTurn();
   return;
  }
 
  if(PLAYER_TYPES[game.turn]==="ai"){
-  setTimeout(aiPlay,600);
+  aiPlay();
  }
 }
 
@@ -208,7 +213,6 @@ function finishTurn(){
  let last=game.dice;
  game.dice=0;
 
- // only pass if not 6
  if(last!==6){
   game.turn=(game.turn+1)%4;
  }
@@ -216,25 +220,22 @@ function finishTurn(){
  updateTurnUI();
 
  if(PLAYER_TYPES[game.turn]==="ai"){
-  setTimeout(rollDice,700);
+  rollDice();
  }
 }
 
 // ---------------- MOVE ----------------
-async function move(t,isAI){
+function move(t,isAI){
  if(isMoving) return;
  if(!isAI && PLAYER_TYPES[game.turn]==="ai") return;
  if(t.p!==game.turn||game.dice===0) return;
 
  isMoving=true;
 
- // FROM BASE
  if(t.pos===-1){
   if(game.dice===6){
     t.pos=START[t.p];
     t.update();
-
-    // capture at start
     captureAt(t.pos,t);
   }else{
     isMoving=false;
@@ -243,13 +244,8 @@ async function move(t,isAI){
   }
  }
  else{
-  for(let i=0;i<game.dice;i++){
-    t.pos=(t.pos+1)%TRACK.length;
-    t.update();
-    await new Promise(r=>setTimeout(r,100));
-  }
-
-  // capture after full move
+  t.pos=(t.pos+game.dice)%TRACK.length;
+  t.update();
   captureAt(t.pos,t);
  }
 
@@ -272,9 +268,9 @@ function aiPlay(){
  }
 
  let choice=valid[Math.floor(Math.random()*valid.length)];
-
- setTimeout(()=>move(choice,true),300);
+ move(choice,true);
 }
+
 </script>
 
 </body>
