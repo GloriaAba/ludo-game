@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo Board (Full System)</title>
+<title>Ludo Board (Final Rules)</title>
 
 <style>
 body{
@@ -43,13 +43,8 @@ body{
 .blue-home{background:#6bcfff}
 .yellow-home{background:#fff36b}
 
-.safe{
-  background:#aaa !important;
-}
-
-.center{
-  background:#222;
-}
+.safe{background:#aaa !important;}
+.center{background:#222;}
 
 .token{
   width:22px;
@@ -123,7 +118,6 @@ const TRACK=[ [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
 const START=[0,13,26,39]
 const TRACK_LENGTH=52
 
-// HOME PATHS
 const HOME_PATHS = [
  [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]],
  [[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]],
@@ -131,7 +125,6 @@ const HOME_PATHS = [
  [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]]
 ]
 
-// SAFE
 const SAFE=[0,8,13,21,26,34,39,47]
 SAFE.forEach(i=>{
  let [r,c]=TRACK[i]
@@ -140,7 +133,6 @@ SAFE.forEach(i=>{
 
 function px(r,c){return[c*40+9,r*40+9]}
 
-// TOKENS
 let ALL_TOKENS=[]
 
 class Token{
@@ -186,7 +178,6 @@ class Token{
  }
 }
 
-// GAME
 const game={players:[],turn:0,dice:0}
 
 function init(){
@@ -214,14 +205,28 @@ function sendHome(token){
  token.update()
 }
 
-// BLOCKADE
 function isBlocked(pos,player){
  let tokens=ALL_TOKENS.filter(t=>t.pos===pos)
  if(tokens.length<2) return false
  return tokens.every(t=>t.p===tokens[0].p) && tokens[0].p!==player
 }
 
-// CAPTURE
+// 🔥 STRICT BLOCKADE CHECK
+function canMove(token,dice){
+ let pos=token.pos
+ let steps=token.steps
+
+ for(let i=0;i<dice;i++){
+  if(steps<TRACK_LENGTH){
+    let next=(pos+1)%TRACK.length
+    if(isBlocked(next,token.p)) return false
+    pos=next
+  }
+  steps++
+ }
+ return true
+}
+
 function checkCapture(t){
  if(SAFE.includes(t.pos)) return
  ALL_TOKENS.forEach(o=>{
@@ -231,7 +236,6 @@ function checkCapture(t){
  })
 }
 
-// TURN
 function finishTurn(){
  if(game.dice!==6){
   game.turn=(game.turn+1)%4
@@ -240,14 +244,12 @@ function finishTurn(){
  turnEl.innerText="Player "+(game.turn+1)
 }
 
-// DICE
 function rollDice(){
  if(game.dice!==0)return
  game.dice=Math.floor(Math.random()*6)+1
  diceEl.innerText=game.dice
 }
 
-// MOVE
 async function move(t){
  if(t.p!==game.turn||game.dice===0||t.finished)return
 
@@ -262,15 +264,18 @@ async function move(t){
   }
  }
  else{
+
   if(t.steps+dice>TRACK_LENGTH+5){
+    finishTurn(); return
+  }
+
+  if(!canMove(t,dice)){
     finishTurn(); return
   }
 
   for(let i=0;i<dice;i++){
     if(t.steps<TRACK_LENGTH){
-      let next=(t.pos+1)%TRACK.length
-      if(isBlocked(next,t.p)) break
-      t.pos=next
+      t.pos=(t.pos+1)%TRACK.length
     }
     t.steps++
     t.update()
