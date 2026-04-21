@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo Stable</title>
+<title>Ludo (Final Rules Fixed)</title>
 
 <style>
 body{
@@ -23,25 +23,16 @@ body{
 }
 
 .cell{
-  width:40px;
-  height:40px;
+  width:40px;height:40px;
   border:1px solid #333;
   background:#eee;
 }
 
-.red-base{background:#e74c3c}
-.green-base{background:#27ae60}
-.blue-base{background:#3498db}
-.yellow-base{background:#f1c40f}
-
 .center{background:#222;}
 
 .token{
-  width:22px;
-  height:22px;
-  border-radius:50%;
-  position:absolute;
-  border:2px solid white;
+  width:22px;height:22px;border-radius:50%;
+  position:absolute;border:2px solid white;
   cursor:pointer;
 }
 
@@ -65,38 +56,27 @@ body{
 </div>
 
 <script>
+const board=document.getElementById("board")
+const diceEl=document.getElementById("dice")
+const turnEl=document.getElementById("turn")
 
-// ---------------- SETUP ----------------
-const board=document.getElementById("board");
-const diceEl=document.getElementById("dice");
-const turnEl=document.getElementById("turn");
+const COLORS=["Red","Green","Yellow","Blue"]
+const PLAYER_TYPES=["human","ai","human","human"]
 
-const COLORS=["Red","Green","Yellow","Blue"];
-const PLAYER_TYPES=["human","ai","human","human"];
+let isMoving=false
 
-let isMoving=false;
-
-// ---------------- BOARD ----------------
+// -------- BOARD --------
 for(let r=0;r<15;r++){
  for(let c=0;c<15;c++){
-  let div=document.createElement("div");
-  div.className="cell";
-
-  if(r<6 && c<6) div.classList.add("red-base");
-  else if(r<6 && c>8) div.classList.add("green-base");
-  else if(r>8 && c<6) div.classList.add("blue-base");
-  else if(r>8 && c>8) div.classList.add("yellow-base");
-
-  if(r>=6 && r<=8 && c>=6 && c<=8){
-    div.classList.add("center");
-  }
-
-  board.appendChild(div);
+  let d=document.createElement("div")
+  d.className="cell"
+  if(r>=6&&r<=8&&c>=6&&c<=8) d.classList.add("center")
+  board.appendChild(d)
  }
 }
 
-// ---------------- TRACK ----------------
-const TRACK=[
+// -------- TRACK --------
+const TRACK=[ /* unchanged */ 
 [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
 [0,7],[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],
 [7,14],[8,14],[8,13],[8,12],[8,11],[8,10],[8,9],
@@ -104,48 +84,67 @@ const TRACK=[
 [14,7],[14,6],[13,6],[12,6],[11,6],[10,6],[9,6],
 [8,5],[8,4],[8,3],[8,2],[8,1],[8,0],
 [7,0],[6,0]
-];
+]
 
-const START=[0,13,26,39];
+const START=[0,13,26,39]
 
-function px(r,c){return[c*40+9,r*40+9];}
+// HOME PATHS
+const HOME_PATHS=[
+ [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]],
+ [[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]],
+ [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]],
+ [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]]
+]
 
-// ---------------- TOKENS ----------------
-let ALL_TOKENS=[];
+function px(r,c){return[c*40+9,r*40+9]}
+
+// -------- TOKENS --------
+let ALL_TOKENS=[]
 
 class Token{
  constructor(p,x,y,color){
-  this.p=p;
-  this.pos=-1;
+  this.p=p
+  this.pos=-1
+  this.steps=0
+  this.finished=false
 
-  this.el=document.createElement("div");
-  this.el.className="token";
-  this.el.style.background=color;
-  document.querySelector(".wrapper").appendChild(this.el);
+  this.el=document.createElement("div")
+  this.el.className="token"
+  this.el.style.background=color
+  document.querySelector(".wrapper").appendChild(this.el)
 
-  this.start=[x,y];
-  this.update();
+  this.start=[x,y]
+  this.update()
 
-  this.el.onclick=()=>move(this,false);
-
-  ALL_TOKENS.push(this);
+  this.el.onclick=()=>move(this,false)
+  ALL_TOKENS.push(this)
  }
 
  update(){
   if(this.pos===-1){
-    this.el.style.left=this.start[0]+"px";
-    this.el.style.top=this.start[1]+"px";
-  }else{
-    let [r,c]=TRACK[this.pos];
-    let [x,y]=px(r,c);
-    this.el.style.left=x+"px";
-    this.el.style.top=y+"px";
+    this.el.style.left=this.start[0]+"px
+    this.el.style.top=this.start[1]+"px
+  }
+  else if(this.steps>=52){
+    let i=this.steps-52
+    if(i<6){
+      let [r,c]=HOME_PATHS[this.p][i]
+      let [x,y]=px(r,c)
+      this.el.style.left=x+"px"
+      this.el.style.top=y+"px"
+    }
+  }
+  else{
+    let [r,c]=TRACK[this.pos]
+    let [x,y]=px(r,c)
+    this.el.style.left=x+"px"
+    this.el.style.top=y+"px"
   }
  }
 }
 
-// ---------------- GAME ----------------
-const game={players:[],turn:0,dice:0};
+// -------- GAME --------
+const game={players:[],turn:0,dice:0}
 
 function init(){
  game.players=[
@@ -153,124 +152,151 @@ function init(){
   makePlayer(1,"green",[420,80]),
   makePlayer(2,"yellow",[420,420]),
   makePlayer(3,"blue",[80,420])
- ];
- updateTurnUI();
+ ]
+ updateUI()
 }
 
 function makePlayer(p,color,[x,y]){
- let arr=[];
+ let arr=[]
  for(let i=0;i<4;i++){
-  arr.push(new Token(p,x+(i%2)*50,y+Math.floor(i/2)*50,color));
+  arr.push(new Token(p,x+(i%2)*50,y+Math.floor(i/2)*50,color))
  }
- return arr;
+ return arr
 }
 
-init();
+init()
 
-// ---------------- UI ----------------
-function updateTurnUI(){
+function updateUI(){
  ALL_TOKENS.forEach(t=>{
-  t.el.classList.remove("active","inactive");
-  if(t.p===game.turn) t.el.classList.add("active");
-  else t.el.classList.add("inactive");
- });
- turnEl.innerText=COLORS[game.turn]+" Player";
+  t.el.classList.remove("active","inactive")
+  if(t.p===game.turn) t.el.classList.add("active")
+  else t.el.classList.add("inactive")
+ })
+ turnEl.innerText=COLORS[game.turn]+" Player"
 }
 
-// ---------------- CAPTURE ----------------
-function captureAt(pos,mover){
- ALL_TOKENS.forEach(t=>{
-  if(t===mover) return;
-  if(t.pos===pos && t.p!==mover.p){
-    t.pos=-1;
-    t.update();
+// -------- BLOCKADE --------
+function isBlockade(pos,player){
+ let tokens=ALL_TOKENS.filter(t=>t.pos===pos)
+ return tokens.length>=2 && tokens.every(t=>t.p===tokens[0].p) && tokens[0].p!==player
+}
+
+// -------- CAPTURE --------
+function capture(pos,mover){
+ let tokens=ALL_TOKENS.filter(t=>t.pos===pos && t!==mover)
+ if(tokens.length===1 && tokens[0].p!==mover.p){
+  tokens[0].pos=-1
+  tokens[0].steps=0
+  tokens[0].update()
+ }
+}
+
+// -------- MOVE VALIDATION --------
+function canMove(t,dice){
+ let pos=t.pos
+ let steps=t.steps
+
+ for(let i=0;i<dice;i++){
+  if(steps<52){
+   let next=(pos+1)%TRACK.length
+   if(isBlockade(next,t.p)) return false
+   pos=next
   }
- });
+  steps++
+ }
+ return true
 }
 
-// ---------------- ROLL ----------------
-function rollDice(){
- if(game.dice!==0||isMoving) return;
+// -------- MOVE --------
+async function move(t,isAI){
+ if(isMoving) return
+ if(!isAI && PLAYER_TYPES[game.turn]==="ai") return
+ if(t.p!==game.turn||game.dice===0||t.finished) return
 
- game.dice=Math.floor(Math.random()*6)+1;
- diceEl.innerText=game.dice;
-
- let tokens=game.players[game.turn];
- let hasToken=tokens.some(t=>t.pos!==-1);
-
- if(!hasToken && game.dice!==6){
-  finishTurn();
-  return;
+ if(!canMove(t,game.dice)){
+  finishTurn()
+  return
  }
 
- if(PLAYER_TYPES[game.turn]==="ai"){
-  aiPlay();
- }
-}
-
-// ---------------- TURN ----------------
-function finishTurn(){
- let last=game.dice;
- game.dice=0;
-
- if(last!==6){
-  game.turn=(game.turn+1)%4;
- }
-
- updateTurnUI();
-
- if(PLAYER_TYPES[game.turn]==="ai"){
-  rollDice();
- }
-}
-
-// ---------------- MOVE ----------------
-function move(t,isAI){
- if(isMoving) return;
- if(!isAI && PLAYER_TYPES[game.turn]==="ai") return;
- if(t.p!==game.turn||game.dice===0) return;
-
- isMoving=true;
+ isMoving=true
 
  if(t.pos===-1){
   if(game.dice===6){
-    t.pos=START[t.p];
-    t.update();
-    captureAt(t.pos,t);
-  }else{
-    isMoving=false;
-    finishTurn();
-    return;
+    t.pos=START[t.p]
+    t.steps=0
+    t.update()
+    capture(t.pos,t)
   }
  }
  else{
-  t.pos=(t.pos+game.dice)%TRACK.length;
-  t.update();
-  captureAt(t.pos,t);
+  for(let i=0;i<game.dice;i++){
+    if(t.steps<52){
+      t.pos=(t.pos+1)%TRACK.length
+    }
+    t.steps++
+    t.update()
+    await new Promise(r=>setTimeout(r,80))
+  }
+
+  if(t.steps===58){
+    t.finished=true
+    t.el.style.display="none"
+  }
+
+  if(t.steps<52){
+    capture(t.pos,t)
+  }
  }
 
- isMoving=false;
- finishTurn();
+ isMoving=false
+ finishTurn()
 }
 
-// ---------------- AI ----------------
-function aiPlay(){
- let tokens=game.players[game.turn];
+// -------- ROLL --------
+function rollDice(){
+ if(game.dice!==0||isMoving) return
+ game.dice=Math.floor(Math.random()*6)+1
+ diceEl.innerText=game.dice
 
- let valid=tokens.filter(t=>{
-  if(t.pos===-1) return game.dice===6;
-  return true;
- });
+ let tokens=game.players[game.turn]
+ let valid=tokens.some(t=>!t.finished && (t.pos!==-1||game.dice===6) && canMove(t,game.dice))
+
+ if(!valid){
+  setTimeout(finishTurn,200)
+  return
+ }
+
+ if(PLAYER_TYPES[game.turn]==="ai"){
+  setTimeout(aiPlay,200)
+ }
+}
+
+// -------- TURN --------
+function finishTurn(){
+ let last=game.dice
+ game.dice=0
+ if(last!==6){
+  game.turn=(game.turn+1)%4
+ }
+ updateUI()
+ if(PLAYER_TYPES[game.turn]==="ai"){
+  setTimeout(rollDice,300)
+ }
+}
+
+// -------- AI --------
+function aiPlay(){
+ let tokens=game.players[game.turn]
+ let valid=tokens.filter(t=>!t.finished && (t.pos!==-1||game.dice===6) && canMove(t,game.dice))
 
  if(valid.length===0){
-  finishTurn();
-  return;
+  finishTurn()
+  return
  }
 
- let choice=valid[Math.floor(Math.random()*valid.length)];
- move(choice,true);
+ let choice=valid[Math.floor(Math.random()*valid.length)]
+ move(choice,true)
 }
-
 </script>
 
 </body>
