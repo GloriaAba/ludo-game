@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo Board (Working Final)</title>
+<title>Ludo (Turn Logic Fixed)</title>
 
 <style>
 body{
@@ -89,8 +89,8 @@ const turnEl=document.getElementById("turn")
 
 const COLORS=["Red","Green","Yellow","Blue"]
 
-// CONFIG
-const PLAYER_TYPES=["human","ai","human","ai"]
+// CONFIG (edit here)
+const PLAYER_TYPES=["human","ai","human","human"]
 const TOTAL_PLAYERS=PLAYER_TYPES.length
 
 let isMoving=false
@@ -135,7 +135,6 @@ class Token{
  constructor(p,x,y,color){
   this.p=p
   this.pos=-1
-  this.finished=false
 
   this.el=document.createElement("div")
   this.el.className="token"
@@ -175,7 +174,6 @@ function init(){
  ]
  updateTurnUI()
 }
-
 function makePlayer(p,color,[x,y]){
  let arr=[]
  for(let i=0;i<4;i++){
@@ -183,13 +181,11 @@ function makePlayer(p,color,[x,y]){
  }
  return arr
 }
-
 init()
 
 function updateTurnUI(){
  ALL_TOKENS.forEach(t=>{
   t.el.classList.remove("active","inactive")
-
   if(t.p===game.turn){
     t.el.classList.add("active")
   } else {
@@ -198,6 +194,29 @@ function updateTurnUI(){
  })
 }
 
+// 🎲 ROLL (FIXED RULE HERE)
+function rollDice(){
+ if(game.dice!==0||isMoving) return
+
+ game.dice=Math.floor(Math.random()*6)+1
+ diceEl.innerText=game.dice
+
+ let tokens=game.players[game.turn]
+
+ let hasTokenOut=tokens.some(t=>t.pos!==-1)
+
+ // ❗ KEY RULE
+ if(!hasTokenOut && game.dice!==6){
+  setTimeout(finishTurn,600)
+  return
+ }
+
+ if(PLAYER_TYPES[game.turn]==="ai"){
+  setTimeout(aiPlay,600)
+ }
+}
+
+// 🔄 TURN
 function finishTurn(){
  let lastDice=game.dice
  game.dice=0
@@ -214,28 +233,17 @@ function finishTurn(){
  }
 }
 
-function rollDice(){
- if(game.dice!==0||isMoving) return
-
- game.dice=Math.floor(Math.random()*6)+1
- diceEl.innerText=game.dice
-
- if(PLAYER_TYPES[game.turn]==="ai"){
-  setTimeout(aiPlay,600)
- }
-}
-
+// 🟢 MOVE (FIXED START LOGIC)
 async function move(t){
  if(isMoving) return
- if(t.p!==game.turn||game.dice===0||t.finished) return
+ if(t.p!==game.turn||game.dice===0) return
  if(PLAYER_TYPES[game.turn]==="ai") return
 
  isMoving=true
- let dice=game.dice
 
- // 🟢 FROM BASE
+ // FROM BASE
  if(t.pos===-1){
-  if(dice===6){
+  if(game.dice===6){
     t.pos=START[t.p]
     t.update()
   } else {
@@ -245,9 +253,8 @@ async function move(t){
   }
  }
 
- // 🔵 NORMAL MOVE
  else{
-  for(let i=0;i<dice;i++){
+  for(let i=0;i<game.dice;i++){
     t.pos=(t.pos+1)%TRACK.length
     t.update()
     await new Promise(r=>setTimeout(r,100))
@@ -258,6 +265,7 @@ async function move(t){
  finishTurn()
 }
 
+// 🤖 AI
 function aiPlay(){
  let tokens=game.players[game.turn]
 
