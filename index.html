@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo (Final Stable AI + Turns)</title>
+<title>Ludo Online (Realtime)</title>
 
 <style>
 body{
@@ -33,11 +33,6 @@ body{
   background:#eee;
 }
 
-.red-base{background:#e74c3c}
-.green-base{background:#27ae60}
-.blue-base{background:#3498db}
-.yellow-base{background:#f1c40f}
-
 .center{background:#222;}
 
 .token{
@@ -46,21 +41,12 @@ body{
   border-radius:50%;
   position:absolute;
   border:2px solid white;
-  cursor:pointer;
 }
 
-.active{
-  box-shadow:0 0 15px white;
-}
+.active{box-shadow:0 0 15px white;}
+.inactive{opacity:0.4;}
 
-.inactive{
-  opacity:0.4;
-  pointer-events:none;
-}
-
-.panel{
-  color:white;
-}
+.panel{color:white;}
 </style>
 </head>
 
@@ -73,42 +59,48 @@ body{
 <div class="panel">
   <button onclick="rollDice()">🎲 Roll</button>
   <h2 id="dice">-</h2>
-  <h3 id="turn">Red Player</h3>
+  <h3 id="turn">Loading...</h3>
 </div>
 
-<script>
+<script type="module">
+
+// 🔥 IMPORT FIREBASE
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+// 🔥 YOUR FIREBASE CONFIG (REPLACE THIS)
+const firebaseConfig = {
+  apiKey: "YOUR_KEY",
+  authDomain: "YOUR_DOMAIN",
+  databaseURL: "YOUR_DB_URL",
+  projectId: "YOUR_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// 🔥 ROOM
+const roomId = "ludo-room-1";
+const gameRef = ref(db, "games/" + roomId);
+
+// ---------------- UI ----------------
 const board=document.getElementById("board")
 const diceEl=document.getElementById("dice")
 const turnEl=document.getElementById("turn")
 
 const COLORS=["Red","Green","Yellow","Blue"]
 
-// CONFIG
-const PLAYER_TYPES=["human","ai","human","human"]
-const TOTAL_PLAYERS=PLAYER_TYPES.length
-
-let isMoving=false
-
-// BUILD BOARD
+// ---------------- BOARD ----------------
 for(let r=0;r<15;r++){
  for(let c=0;c<15;c++){
   let div=document.createElement("div")
   div.className="cell"
-
-  if(r<6 && c<6) div.classList.add("red-base")
-  else if(r<6 && c>8) div.classList.add("green-base")
-  else if(r>8 && c<6) div.classList.add("blue-base")
-  else if(r>8 && c>8) div.classList.add("yellow-base")
-
-  if(r>=6 && r<=8 && c>=6 && c<=8){
-    div.classList.add("center")
-  }
-
+  if(r>=6 && r<=8 && c>=6 && c<=8) div.classList.add("center")
   board.appendChild(div)
  }
 }
 
-// TRACK
+// ---------------- TRACK ----------------
 const TRACK=[
 [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
 [0,7],[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],
@@ -123,6 +115,7 @@ const START=[0,13,26,39]
 
 function px(r,c){return[c*40+9,r*40+9]}
 
+// ---------------- TOKENS ----------------
 let ALL_TOKENS=[]
 
 class Token{
@@ -137,8 +130,6 @@ class Token{
 
   this.start=[x,y]
   this.update()
-
-  this.el.onclick=()=>move(this,false)
 
   ALL_TOKENS.push(this)
  }
@@ -156,127 +147,98 @@ class Token{
  }
 }
 
-// GAME
-const game={players:[],turn:0,dice:0}
+// INIT TOKENS
+function createTokens(){
+ let positions=[[80,80],[480,80],[480,480],[80,480]]
+ let colors=["red","green","yellow","blue"]
 
-function init(){
- game.players=[
-  makePlayer(0,"red",[80,80]),
-  makePlayer(1,"green",[480,80]),
-  makePlayer(2,"yellow",[480,480]),
-  makePlayer(3,"blue",[80,480])
- ]
- updateTurnUI()
-}
-
-function makePlayer(p,color,[x,y]){
- let arr=[]
- for(let i=0;i<4;i++){
-  arr.push(new Token(p,x+(i%2)*50,y+Math.floor(i/2)*50,color))
- }
- return arr
-}
-
-init()
-
-function updateTurnUI(){
- ALL_TOKENS.forEach(t=>{
-  t.el.classList.remove("active","inactive")
-  if(t.p===game.turn){
-    t.el.classList.add("active")
-  } else {
-    t.el.classList.add("inactive")
+ for(let p=0;p<4;p++){
+  for(let i=0;i<4;i++){
+    new Token(p,
+      positions[p][0]+(i%2)*50,
+      positions[p][1]+Math.floor(i/2)*50,
+      colors[p]
+    )
   }
+ }
+}
+
+createTokens()
+
+// ---------------- STATE ----------------
+let game={turn:0,dice:0}
+
+// ---------------- FIREBASE SYNC ----------------
+
+// listen for updates
+onValue(gameRef, snapshot=>{
+ let data=snapshot.val()
+ if(!data) return
+
+ game.turn=data.turn
+ game.dice=data.dice
+
+ diceEl.innerText=data.dice
+ turnEl.innerText=COLORS[game.turn]+" Player"
+
+ data.tokens.forEach((t,i)=>{
+  ALL_TOKENS[i].pos=t.pos
+  ALL_TOKENS[i].update()
+ })
+})
+
+// save state
+function saveGame(){
+ set(gameRef,{
+  turn:game.turn,
+  dice:game.dice,
+  tokens:ALL_TOKENS.map(t=>({p:t.p,pos:t.pos}))
  })
 }
 
-// 🎲 ROLL
-function rollDice(){
- if(game.dice!==0||isMoving) return
+// ---------------- GAME LOGIC ----------------
+
+// roll dice
+window.rollDice=function(){
+ if(game.dice!==0) return
 
  game.dice=Math.floor(Math.random()*6)+1
- diceEl.innerText=game.dice
-
- let tokens=game.players[game.turn]
- let hasToken=tokens.some(t=>t.pos!==-1)
-
- if(!hasToken && game.dice!==6){
-  setTimeout(finishTurn,600)
-  return
- }
-
- if(PLAYER_TYPES[game.turn]==="ai"){
-  setTimeout(aiPlay,600)
- }
+ saveGame()
 }
 
-// 🔄 TURN
-function finishTurn(){
- let last=game.dice
- game.dice=0
+// move token
+window.moveToken=function(index){
+ if(game.dice===0) return
 
- // ❗ stay on same player if 6
- if(last!==6){
-  game.turn=(game.turn+1)%TOTAL_PLAYERS
- }
-
- turnEl.innerText=COLORS[game.turn]+" Player"
- updateTurnUI()
-
- // 🔥 AI keeps going automatically
- if(PLAYER_TYPES[game.turn]==="ai"){
-  setTimeout(rollDice,700)
- }
-}
-
-// 🟢 MOVE
-async function move(t,isAI){
- if(isMoving) return
- if(!isAI && PLAYER_TYPES[game.turn]==="ai") return
- if(t.p!==game.turn||game.dice===0) return
-
- isMoving=true
+ let t=ALL_TOKENS[index]
 
  if(t.pos===-1){
   if(game.dice===6){
     t.pos=START[t.p]
-    t.update()
-  } else {
-    isMoving=false
-    finishTurn()
+  }else{
+    nextTurn()
     return
   }
  }
  else{
-  for(let i=0;i<game.dice;i++){
-    t.pos=(t.pos+1)%TRACK.length
-    t.update()
-    await new Promise(r=>setTimeout(r,100))
-  }
+  t.pos=(t.pos+game.dice)%TRACK.length
  }
 
- isMoving=false
- finishTurn()
+ nextTurn()
 }
 
-// 🤖 AI
-function aiPlay(){
- let tokens=game.players[game.turn]
+// next turn
+function nextTurn(){
+ let last=game.dice
 
- let valid=tokens.filter(t=>{
-  if(t.pos===-1) return game.dice===6
-  return true
- })
-
- if(valid.length===0){
-  finishTurn()
-  return
+ if(last!==6){
+  game.turn=(game.turn+1)%4
  }
 
- let choice=valid[Math.floor(Math.random()*valid.length)]
-
- setTimeout(()=>move(choice,true),300)
+ game.dice=0
+ saveGame()
 }
+
 </script>
 
 </body>
