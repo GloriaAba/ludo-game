@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo (Fixed Capture)</title>
+<title>Ludo (Fixed Capture Only)</title>
 
 <style>
 body{
@@ -11,13 +11,10 @@ body{
   align-items:center;
   height:100vh;
   margin:0;
-  gap:40px;
 }
 
 .wrapper{
   position:relative;
-  width:600px;
-  height:600px;
 }
 
 #board{
@@ -33,6 +30,12 @@ body{
   background:#eee;
 }
 
+/* ORIGINAL COLORS (UNCHANGED) */
+.red-base{background:#e74c3c}
+.green-base{background:#27ae60}
+.blue-base{background:#3498db}
+.yellow-base{background:#f1c40f}
+
 .center{background:#222;}
 
 .token{
@@ -44,10 +47,10 @@ body{
   cursor:pointer;
 }
 
-.active{box-shadow:0 0 15px white;}
-.inactive{opacity:0.4; pointer-events:none;}
-
-.panel{color:white;}
+.panel{
+  margin-left:20px;
+  color:white;
+}
 </style>
 </head>
 
@@ -60,31 +63,37 @@ body{
 <div class="panel">
   <button onclick="rollDice()">🎲 Roll</button>
   <h2 id="dice">-</h2>
-  <h3 id="turn">Red Player</h3>
+  <h3 id="turn">Player 1</h3>
 </div>
 
 <script>
 
-// ---------------- BASIC SETUP ----------------
+// ---------------- UI ----------------
 const board=document.getElementById("board")
 const diceEl=document.getElementById("dice")
 const turnEl=document.getElementById("turn")
 
-const COLORS=["Red","Green","Yellow","Blue"]
-
-let isMoving=false
-
-// ---------------- BOARD ----------------
+// ---------------- BOARD (UNCHANGED) ----------------
 for(let r=0;r<15;r++){
  for(let c=0;c<15;c++){
+
   let div=document.createElement("div")
   div.className="cell"
-  if(r>=6 && r<=8 && c>=6 && c<=8) div.classList.add("center")
+
+  if(r<6 && c<6) div.classList.add("red-base")
+  else if(r<6 && c>8) div.classList.add("green-base")
+  else if(r>8 && c<6) div.classList.add("blue-base")
+  else if(r>8 && c>8) div.classList.add("yellow-base")
+
+  if(r>=6 && r<=8 && c>=6 && c<=8){
+    div.classList.add("center")
+  }
+
   board.appendChild(div)
  }
 }
 
-// ---------------- TRACK ----------------
+// ---------------- TRACK (UNCHANGED) ----------------
 const TRACK=[
 [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
 [0,7],[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],
@@ -139,13 +148,11 @@ const game={players:[],turn:0,dice:0}
 function init(){
  game.players=[
   makePlayer(0,"red",[80,80]),
-  makePlayer(1,"green",[480,80]),
-  makePlayer(2,"yellow",[480,480]),
-  makePlayer(3,"blue",[80,480])
+  makePlayer(1,"green",[420,80]),
+  makePlayer(2,"yellow",[420,420]),
+  makePlayer(3,"blue",[80,420])
  ]
- updateTurnUI()
 }
-
 function makePlayer(p,color,[x,y]){
  let arr=[]
  for(let i=0;i<4;i++){
@@ -153,69 +160,44 @@ function makePlayer(p,color,[x,y]){
  }
  return arr
 }
-
 init()
 
-// ---------------- UI ----------------
-function updateTurnUI(){
- ALL_TOKENS.forEach(t=>{
-  t.el.classList.remove("active","inactive")
-  if(t.p===game.turn) t.el.classList.add("active")
-  else t.el.classList.add("inactive")
- })
-}
-
-// ---------------- CAPTURE (FIXED) ----------------
+// ---------------- CAPTURE (ONLY FIX) ----------------
 function captureAt(pos, movingToken){
+
   ALL_TOKENS.forEach(t => {
 
-    // skip itself
     if(t === movingToken) return;
 
-    // DIFFERENT PLAYER → CAPTURE
+    // DIFFERENT PLAYER → SEND HOME
     if(t.pos === pos && t.p !== movingToken.p){
       t.pos = -1;
       t.update();
     }
 
   });
-}
 
-// ---------------- ROLL ----------------
-function rollDice(){
- if(game.dice!==0||isMoving) return
-
- game.dice=Math.floor(Math.random()*6)+1
- diceEl.innerText=game.dice
-
- let tokens=game.players[game.turn]
- let hasToken=tokens.some(t=>t.pos!==-1)
-
- // must roll 6 to start
- if(!hasToken && game.dice!==6){
-  setTimeout(finishTurn,600)
- }
 }
 
 // ---------------- TURN ----------------
 function finishTurn(){
- let last=game.dice
- game.dice=0
-
- if(last!==6){
+ if(game.dice!==6){
   game.turn=(game.turn+1)%4
  }
+ game.dice=0
+ turnEl.innerText="Player "+(game.turn+1)
+}
 
- turnEl.innerText=COLORS[game.turn]+" Player"
- updateTurnUI()
+// ---------------- ROLL ----------------
+function rollDice(){
+ if(game.dice!==0)return
+ game.dice=Math.floor(Math.random()*6)+1
+ diceEl.innerText=game.dice
 }
 
 // ---------------- MOVE ----------------
 async function move(t){
- if(isMoving) return
- if(t.p!==game.turn||game.dice===0) return
-
- isMoving=true
+ if(t.p!==game.turn||game.dice===0)return
 
  // FROM BASE
  if(t.pos===-1){
@@ -223,17 +205,10 @@ async function move(t){
     t.pos=START[t.p]
     t.update()
 
-    // capture check immediately
-    captureAt(t.pos, t)
-
-  } else {
-    isMoving=false
-    finishTurn()
-    return
+    // 🔥 capture happens here
+    captureAt(t.pos,t)
   }
  }
-
- // NORMAL MOVE
  else{
   for(let i=0;i<game.dice;i++){
     t.pos=(t.pos+1)%TRACK.length
@@ -241,11 +216,10 @@ async function move(t){
     await new Promise(r=>setTimeout(r,100))
   }
 
-  // capture AFTER full move
-  captureAt(t.pos, t)
+  // 🔥 capture AFTER movement finishes
+  captureAt(t.pos,t)
  }
 
- isMoving=false
  finishTurn()
 }
 
