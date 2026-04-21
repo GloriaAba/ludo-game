@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Ludo Fixed</title>
+<title>Ludo Fixed Display</title>
 
 <style>
 body{
@@ -29,21 +29,16 @@ body{
   background:#eee;
 }
 
-.red-base{background:#e74c3c}
-.green-base{background:#27ae60}
-.blue-base{background:#3498db}
-.yellow-base{background:#f1c40f}
-
 .center{background:#222;}
 
 .token{
-  width:22px;height:22px;border-radius:50%;
-  position:absolute;border:2px solid white;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  position:absolute;
+  border:2px solid white;
   cursor:pointer;
 }
-
-.active{ box-shadow:0 0 15px white; }
-.inactive{ opacity:0.4; pointer-events:none; }
 
 .panel{ color:white; }
 </style>
@@ -63,6 +58,9 @@ body{
 
 <script>
 
+// -------- SAFE INIT --------
+window.onload = function(){
+
 const board=document.getElementById("board")
 const diceEl=document.getElementById("dice")
 const turnEl=document.getElementById("turn")
@@ -74,14 +72,7 @@ for(let r=0;r<15;r++){
  for(let c=0;c<15;c++){
   let d=document.createElement("div")
   d.className="cell"
-
-  if(r<6 && c<6) d.classList.add("red-base")
-  else if(r<6 && c>8) d.classList.add("green-base")
-  else if(r>8 && c<6) d.classList.add("blue-base")
-  else if(r>8 && c>8) d.classList.add("yellow-base")
-
-  if(r>=6 && r<=8 && c>=6 && c<=8) d.classList.add("center")
-
+  if(r>=6&&r<=8&&c>=6&&c<=8) d.classList.add("center")
   board.appendChild(d)
  }
 }
@@ -137,16 +128,6 @@ class Token{
 // -------- GAME --------
 const game={players:[],turn:0,dice:0}
 
-function init(){
- game.players=[
-  makePlayer(0,"red",[80,80]),
-  makePlayer(1,"green",[420,80]),
-  makePlayer(2,"yellow",[420,420]),
-  makePlayer(3,"blue",[80,420])
- ]
- updateUI()
-}
-
 function makePlayer(p,color,[x,y]){
  let arr=[]
  for(let i=0;i<4;i++){
@@ -155,11 +136,13 @@ function makePlayer(p,color,[x,y]){
  return arr
 }
 
-init()
-
-function updateUI(){
- turnEl.innerText="Player "+(game.turn+1)
-}
+// INIT PLAYERS
+game.players=[
+ makePlayer(0,"red",[80,80]),
+ makePlayer(1,"green",[420,80]),
+ makePlayer(2,"yellow",[420,420]),
+ makePlayer(3,"blue",[80,420])
+]
 
 // -------- BLOCKADE --------
 function isBlockade(pos,player){
@@ -167,7 +150,7 @@ function isBlockade(pos,player){
  return tokens.length>=2 && tokens.every(t=>t.p===tokens[0].p) && tokens[0].p!==player
 }
 
-// -------- VALID MOVE --------
+// -------- MOVE CHECK --------
 function canMove(t,dice){
  let pos=t.pos
  for(let i=0;i<dice;i++){
@@ -181,13 +164,10 @@ function canMove(t,dice){
 // -------- CAPTURE --------
 function captureAt(pos,mover){
  let tokens=ALL_TOKENS.filter(t=>t.pos===pos && t!==mover)
-
  if(tokens.length!==1) return
-
- let target=tokens[0]
- if(target.p!==mover.p){
-  target.pos=-1
-  target.update()
+ if(tokens[0].p!==mover.p){
+  tokens[0].pos=-1
+  tokens[0].update()
  }
 }
 
@@ -209,8 +189,7 @@ function move(t,isAI){
     finishTurn()
     return
   }
- }
- else{
+ }else{
   t.pos=(t.pos+game.dice)%TRACK.length
   t.update()
   captureAt(t.pos,t)
@@ -220,7 +199,7 @@ function move(t,isAI){
 }
 
 // -------- ROLL --------
-function rollDice(){
+window.rollDice=function(){
  if(game.dice!==0) return
 
  game.dice=Math.floor(Math.random()*6)+1
@@ -239,7 +218,7 @@ function rollDice(){
  }
 
  if(PLAYER_TYPES[game.turn]==="ai"){
-  aiPlay()
+  setTimeout(aiPlay,200)
  }
 }
 
@@ -252,10 +231,10 @@ function finishTurn(){
   game.turn=(game.turn+1)%4
  }
 
- updateUI()
+ turnEl.innerText="Player "+(game.turn+1)
 
  if(PLAYER_TYPES[game.turn]==="ai"){
-  rollDice()
+  setTimeout(rollDice,200)
  }
 }
 
@@ -277,6 +256,7 @@ function aiPlay(){
  move(choice,true)
 }
 
+}
 </script>
 
 </body>
